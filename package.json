@@ -1,0 +1,20 @@
+{
+  "name": "safe-streets-to",
+  "private": true,
+  "workspaces": [
+    "api",
+    "web",
+    "db"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w api\" \"npm run dev -w web\"",
+    "db:migrate": "npm run migrate -w db",
+    "ingest": "npm run ingest -w db"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
