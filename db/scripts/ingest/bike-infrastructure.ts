@@ -31,42 +31,45 @@ export async function ingestBikeInfrastructure(client: pg.PoolClient): Promise<n
 
   const infraValues = new Set<string>();
   let inserted = 0;
-  for await (const batch of datastoreRecords(resource.id)) {
-    for (const row of batch) {
+  for await (const batch of datastoreRecords(resource.id, { pageSize: 3000 })) {
+    const rows = batch.flatMap((row) => {
+      const geometry = geometryGeoJson(row);
+      if (!geometry) return [];
       const geomJson = geometryGeoJson(row);
-      if (!geomJson) continue;
       const infraHigh = String(row.INFRA_HIGHORDER ?? "");
       if (infraHigh) infraValues.add(infraHigh);
-      const protection = protectionFromInfraHigh(infraHigh);
-
-      await client.query(
-        `
-        INSERT INTO bike_infrastructure (
-          segment_id, street_name, from_street, to_street,
-          infra_highorder, infra_loworder, protection_level,
-          installed_year, upgraded_year, shape_length_m, geometry
-        )
-        VALUES (
-          $1, $2, $3, $4, $5, $6, $7::protection_level, $8, $9,
-          ST_Length(ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON($10), 4326), 3857)),
-          ST_Multi(ST_LineMerge(ST_SetSRID(ST_GeomFromGeoJSON($10), 4326)))
-        )
-        `,
-        [
-          row.SEGMENT_ID ?? null,
-          row.STREET_NAME ?? null,
-          row.FROM_STREET ?? null,
-          row.TO_STREET ?? null,
-          infraHigh,
-          row.INFRA_LOWORDER ?? null,
-          protection,
-          parseYear(row.INSTALLED),
-          parseYear(row.UPGRADED),
-          geomJson,
-        ],
-      );
-      inserted += 1;
-    }
+      return [{ segment_id: row.SEGMENT_ID ?? null, street_name: row.STREET_NAME ?? null,
+        from_street: row.FROM_STREET ?? null, to_street: row.TO_STREET ?? null,
+        infra_highorder: infraHigh, infra_loworder: row.INFRA_LOWORDER ?? null,
+        protection_level: protectionFromInfraHigh(infraHigh),
+        installed_year: parseYear(row.INSTALLED), upgraded_year: parseYear(row.UPGRADED),
+        geometry: geomJson }];
+    });
+    if (rows.length === 0) continue;
+    const result = await client.query(
+      `WITH source AS (
+         SELECT row->>'segment_id' AS segment_id,
+                NULLIF(row->>'street_name','null') AS street_name,
+                NULLIF(row->>'from_street','null') AS from_street,
+                NULLIF(row->>'to_street','null') AS to_street,
+                row->>'infra_highorder' AS infra_highorder,
+                NULLIF(row->>'infra_loworder','null') AS infra_loworder,
+                row->>'protection_level' AS protection_level,
+                NULLIF(row->>'installed_year','null') AS installed_year,
+                NULLIF(row->>'upgraded_year','null') AS upgraded_year,
+                ST_Multi(ST_LineMerge(ST_SetSRID(ST_GeomFromGeoJSON(row->>'geometry'),4326))) AS geom
+         FROM jsonb_array_elements($1::jsonb) AS x(row)
+       )
+       INSERT INTO bike_infrastructure (
+         segment_id,street_name,from_street,to_street,infra_highorder,infra_loworder,
+         protection_level,installed_year,upgraded_year,shape_length_m,geometry
+       )
+       SELECT segment_id,street_name,from_street,to_street,infra_highorder,infra_loworder,
+              protection_level::protection_level,installed_year::smallint,upgraded_year::smallint,
+              ST_Length(ST_Transform(geom,3857)),geom FROM source`,
+      [JSON.stringify(rows)],
+    );
+    inserted += result.rowCount ?? 0;
   }
 
   console.log("\nINFRA_HIGHORDER values → protection_level mapping:");

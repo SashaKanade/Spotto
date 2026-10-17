@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useApi } from "../api";
 import { COLORS } from "../mapStyle";
 import type { WardDetail, WardProps } from "../types";
+import { apiUrl } from "../api";
 
 interface Props {
   wards: { ward_number: number; name: string }[];
@@ -13,12 +15,26 @@ interface Props {
 const km = (n: number) => `${n.toFixed(1)} km`;
 
 export default function WardPanel({ wards, selected, onSelect, summaries }: Props) {
+  const [briefing, setBriefing] = useState("");
+  const [briefingError, setBriefingError] = useState("");
+  const [briefingLoading, setBriefingLoading] = useState(false);
+  async function loadBriefing(): Promise<void> {
+    if (selected == null) return;
+    setBriefingLoading(true); setBriefingError("");
+    try {
+      const response = await fetch(apiUrl(`/api/ward/${selected}/briefing`), { method: "POST" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Could not create briefing");
+      setBriefing(body.summary);
+    } catch (e) { setBriefingError(e instanceof Error ? e.message : "Could not create briefing"); }
+    finally { setBriefingLoading(false); }
+  }
   const { data, error, loading } = useApi<WardDetail>(
     selected == null ? null : `/api/wards/${selected}`,
   );
 
   return (
-    <aside className="side" aria-label="Ward details">
+    <div className="ward-panel" aria-label="Ward details">
       <label className="field">
         <span>Ward</span>
         <select
@@ -54,9 +70,16 @@ export default function WardPanel({ wards, selected, onSelect, summaries }: Prop
             </p>
           )}
           {data && <WardStats d={data} />}
+          <section className="ward-briefing">
+            <h3>Ward briefing</h3>
+            <p className="muted">A plain-language summary from ward statistics.</p>
+            <button type="button" onClick={() => void loadBriefing()} disabled={briefingLoading}>{briefingLoading ? "Preparing…" : "Create briefing"}</button>
+            {briefingError && <p className="error" role="alert">{briefingError}</p>}
+            {briefing && <p aria-live="polite">{briefing}</p>}
+          </section>
         </section>
       )}
-    </aside>
+    </div>
   );
 }
 

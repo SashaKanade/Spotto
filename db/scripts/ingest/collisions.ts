@@ -6,7 +6,7 @@ import {
   pickDatastoreResource,
   resourceSourceUrl,
 } from "../lib/ckan.js";
-import { PACKAGES } from "../lib/config.js";
+import { KSI_MIN_YEAR, PACKAGES } from "../lib/config.js";
 import { geometryGeoJson } from "../lib/geo.js";
 import { writeIngestLog } from "../lib/ingest-log.js";
 import { printColumnSummary } from "../lib/inspect.js";
@@ -41,6 +41,7 @@ export async function ingestCollisions(client: pg.PoolClient): Promise<number> {
 
   let inserted = 0;
   let skipped = 0;
+  let outsideWindow = 0;
   for await (const batch of datastoreRecords(resource.id, {
     pageSize: 2000,
     filters: filter,
@@ -50,6 +51,10 @@ export async function ingestCollisions(client: pg.PoolClient): Promise<number> {
       const parsed = parseAccidentDate(row.accdate);
       if (!geomJson || !parsed) {
         skipped += 1;
+        continue;
+      }
+      if (parsed.year < KSI_MIN_YEAR) {
+        outsideWindow += 1;
         continue;
       }
 
@@ -89,7 +94,7 @@ export async function ingestCollisions(client: pg.PoolClient): Promise<number> {
   const wardsUpdated = await assignWardIdsFromGeometry(client, "collisions", "location");
   const snapped = await snapPointsToNearestSegment(client, "collisions", "location");
   console.log(
-    `Collisions: spatial ward_id on ${wardsUpdated} rows; nearest segment on ${snapped} rows; skipped ${skipped} (missing geom/date).`,
+    `Collisions: kept ${KSI_MIN_YEAR} onward; skipped ${outsideWindow} older rows and ${skipped} rows with missing geometry/date; spatial ward_id on ${wardsUpdated} rows; nearest segment on ${snapped} rows.`,
   );
 
   const sourceUrl = resourceSourceUrl(resource, PACKAGES.ksiCollisions);

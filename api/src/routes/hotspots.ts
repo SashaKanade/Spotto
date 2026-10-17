@@ -89,7 +89,7 @@ hotspotsRouter.get(
         count: features.length,
         ward: q.ward ?? null,
         min_collisions: q.min_collisions,
-        note: "Ranked by gap_score = 10 x cyclist KSI count + a penalty for lower protection. Police-reported KSI only; locations may be generalized.",
+        note: "Ranked by gap_score = (cyclist KSI × 10) + protection penalty + dead-end bonus. See /api/methodology. Police-reported KSI only; locations may be generalized.",
       }),
     );
   }),

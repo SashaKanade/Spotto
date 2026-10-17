@@ -16,6 +16,7 @@ import unzipper from "unzipper";
 
 async function inspect311(): Promise<void> {
   const pkg = await packageShow(PACKAGES.requests311);
+  console.log("311 yearly resources:", pkg.resources.filter((r) => r.format.toUpperCase() === "ZIP").map((r) => r.name).join(", "));
   const resources = pick311YearResources(pkg.resources, [REQUESTS_311_YEARS[0]]);
   const resource = resources[0];
   const res = await fetch(resource.url);

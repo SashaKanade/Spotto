@@ -58,6 +58,10 @@ npm run dev
 - API: http://localhost:3001 (default `PORT`)
 - Web: http://localhost:5173
 
+## Deployment
+
+See [DEPLOY.md](./DEPLOY.md) for the Vercel frontend and Render API setup, database migrations, environment variables, and deployment checks.
+
 ## Monorepo layout
 
 | Package | Path | Role |

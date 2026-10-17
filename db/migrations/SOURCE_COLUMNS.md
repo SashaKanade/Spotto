@@ -7,8 +7,8 @@ Verified against Toronto CKAN datastore / sample files (2026-10). Ingestion must
 | City Wards | `5e7a8234-f805-43ac-820f-03d7c360b588` | `AREA_ID`, `AREA_SHORT_CODE` (ward number), `AREA_NAME`, `geometry`, `OBJECTID` |
 | Toronto Centreline | `1d079757-377b-4564-82df-eb5638583bfb` | `CENTRELINE_ID`, `LINEAR_NAME_FULL`, `FEATURE_CODE`, `geometry`, … |
 | Cycling Network | `abbe5ee3-e249-4f86-a219-f0022eaddcc9` | `SEGMENT_ID`, `INFRA_HIGHORDER`, `INFRA_LOWORDER`, `STREET_NAME`, `SHAPE_LENGTH`, `geometry` |
-| Motor Vehicle KSI | `73a8e475-9683-42e1-ac06-b8690dcba062` | `collision_id`, `accdate`, `injury`, `cyclist`, `longitude`, `latitude`, `geometry`, `wardname`, `stname1`, `stname2`, `per_no` — filter `cyclist` for cyclist-involved rows |
-| 311 Service Requests | `2e54bc0e-4399-4076-b717-351df5918ae7` | Yearly ZIP → `SR{YYYY}.csv`: `Creation Date`, `Status`, `Service Request Type`, `Ward`, intersection fields, `Division`, `Section` — no geometry in CSV |
+| Motor Vehicle KSI | `73a8e475-9683-42e1-ac06-b8690dcba062` | `collision_id`, `accdate`, `injury`, `road_user`, `longitude`, `latitude`, `geometry`, `wardname`, `stname1`, `stname2`, `per_no` — `road_user=cyclist`; retain only the latest five calendar years |
+| 311 Service Requests | `2e54bc0e-4399-4076-b717-351df5918ae7` | Yearly ZIP → CSV: `Creation Date`, `Status`, `Service Request Type`, `Ward`, intersection fields, `Division`, `Section` — no geometry in CSV; only the latest three annual files and bike-related request types are loaded |
 
 **Notes**
 

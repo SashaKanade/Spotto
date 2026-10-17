@@ -40,8 +40,18 @@ function externalId(year: number, row: Record<string, string>): string {
 }
 
 async function parse311Zip(url: string): Promise<{ headers: string[]; rows: Record<string, string>[] }> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to download 311 ZIP: ${res.status} ${url}`);
+  let res: Response | undefined;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      res = await fetch(url);
+      if (res.ok) break;
+      if (![429, 502, 503, 504].includes(res.status)) break;
+    } catch (error) {
+      if (attempt === 2) throw error;
+    }
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+  }
+  if (!res?.ok) throw new Error(`Failed to download 311 ZIP after retries: ${res?.status ?? "network error"} ${url}`);
   const buf = Buffer.from(await res.arrayBuffer());
   const directory = await unzipper.Open.buffer(buf);
   const csvEntry = directory.files.find((f) => f.path.toLowerCase().endsWith(".csv"));
@@ -70,7 +80,12 @@ export async function ingestRequests311(client: pg.PoolClient): Promise<number> 
   const yearResources = pick311YearResources(pkg.resources, REQUESTS_311_YEARS);
 
   let totalInserted = 0;
+  let loadedYears = 0;
   await client.query(`TRUNCATE requests_311 RESTART IDENTITY CASCADE`);
+  const wardRows = await client.query<{ id: number; ward_number: number }>(
+    `SELECT id, ward_number FROM wards`,
+  );
+  const wardIds = new Map(wardRows.rows.map((w) => [w.ward_number, w.id]));
 
   for (const resource of yearResources) {
     const yearMatch = resource.name.match(/(20\d{2})/);
@@ -78,7 +93,15 @@ export async function ingestRequests311(client: pg.PoolClient): Promise<number> 
     if (Number.isNaN(year)) throw new Error(`Could not parse year from ${resource.name}`);
 
     console.log(`\nDownloading ${resource.name}…`);
-    const { headers, rows } = await parse311Zip(resource.url);
+    let parsed: { headers: string[]; rows: Record<string, string>[] };
+    try {
+      parsed = await parse311Zip(resource.url);
+    } catch (error) {
+      console.warn(`311 ${year}: resource unavailable; skipping this year. ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+    const { headers, rows } = parsed;
+    loadedYears += 1;
     if (headers.length > 0) {
       csvHeaderSummary(`311 Service Requests ${year}`, headers);
     }
@@ -90,7 +113,7 @@ export async function ingestRequests311(client: pg.PoolClient): Promise<number> 
       `311 ${year}: ${rows.length} total rows → ${bikeRows.length} bike-related (after filters).`,
     );
 
-    let inserted = 0;
+    const insertRows: Record<string, unknown>[] = [];
     for (const row of bikeRows) {
       const openedRaw = row["Creation Date"];
       if (!openedRaw) continue;
@@ -98,47 +121,49 @@ export async function ingestRequests311(client: pg.PoolClient): Promise<number> 
       if (Number.isNaN(openedAt.getTime())) continue;
 
       const wardNum = parseWardNumberFrom311(row.Ward);
-      let wardId: number | null = null;
-      if (wardNum != null) {
-        const w = await client.query<{ id: number }>(
-          `SELECT id FROM wards WHERE ward_number = $1`,
-          [wardNum],
-        );
-        wardId = w.rows[0]?.id ?? null;
-      }
-
-      await client.query(
-        `
-        INSERT INTO requests_311 (
-          external_id, request_type, status, opened_at, closed_at,
-          ward_name, ward_id, intersection_street_1, intersection_street_2,
-          postal_prefix, division, section, source_year
-        )
-        VALUES ($1, $2, $3, $4::timestamptz, NULL, $5, $6, $7, $8, $9, $10, $11, $12)
-        `,
-        [
-          externalId(year, row),
-          row["Service Request Type"],
-          row.Status ?? null,
-          openedAt.toISOString(),
-          row.Ward ?? null,
-          wardId,
-          row["Intersection Street 1"] || null,
-          row["Intersection Street 2"] || null,
-          row["First 3 Chars of Postal Code"] || null,
-          row.Division ?? null,
-          (row.Section ?? "").replace(/\r$/, "") || null,
-          year,
-        ],
-      );
-      inserted += 1;
+      insertRows.push({
+        external_id: externalId(year, row),
+        request_type: row["Service Request Type"],
+        status: row.Status ?? null,
+        opened_at: openedAt.toISOString(),
+        ward_name: row.Ward ?? null,
+        ward_id: wardNum == null ? null : wardIds.get(wardNum) ?? null,
+        intersection_street_1: row["Intersection Street 1"] || null,
+        intersection_street_2: row["Intersection Street 2"] || null,
+        postal_prefix: row["First 3 Chars of Postal Code"] || null,
+        division: row.Division ?? null,
+        section: (row.Section ?? row["Section\r"] ?? "").replace(/\r$/, "") || null,
+        source_year: year,
+      });
     }
+
+    const batchSize = 1000;
+    for (let i = 0; i < insertRows.length; i += batchSize) {
+      const chunk = insertRows.slice(i, i + batchSize);
+      await client.query(
+        `INSERT INTO requests_311 (
+           external_id,request_type,status,opened_at,closed_at,ward_name,ward_id,
+           intersection_street_1,intersection_street_2,postal_prefix,division,section,source_year
+         )
+         SELECT external_id,request_type,status,opened_at::timestamptz,NULL,ward_name,ward_id::int,
+                intersection_street_1,intersection_street_2,postal_prefix,division,section,source_year::smallint
+         FROM jsonb_to_recordset($1::jsonb) AS x(
+           external_id text,request_type text,status text,opened_at text,ward_name text,ward_id text,
+           intersection_street_1 text,intersection_street_2 text,postal_prefix text,division text,
+           section text,source_year text
+         )`,
+        [JSON.stringify(chunk)],
+      );
+    }
+    const inserted = insertRows.length;
 
     const sourceUrl = resourceSourceUrl(resource, PACKAGES.requests311);
     await writeIngestLog(client, `requests_311_${year}`, sourceUrl, inserted);
     console.log(`311 ${year}: inserted ${inserted} rows.`);
     totalInserted += inserted;
   }
+
+  if (loadedYears === 0) throw new Error("No recent 311 annual files could be downloaded; existing table refresh rolled back.");
 
   const geocoded = await geocode311Intersections(client);
   const byName = await assign311WardIdsByNumber(client);

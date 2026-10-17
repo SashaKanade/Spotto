@@ -27,10 +27,12 @@ import type {
   ApiFeatureCollection,
   BikeLaneProps,
   CollisionProps,
+  GapHeatmapPoint,
   HotspotProps,
   LayerToggles,
   WardProps,
 } from "../types";
+import GapHeatmapOverlay from "./GapHeatmapOverlay";
 
 type Fc<P> = ApiFeatureCollection<P> | null;
 
@@ -39,9 +41,15 @@ interface Props {
   collisions: Fc<CollisionProps>;
   bikeLanes: Fc<BikeLaneProps>;
   hotspots: Fc<HotspotProps>;
+  gapHeatmap: GapHeatmapPoint[];
   layers: LayerToggles;
   selectedWard: number | null;
   onSelectWard: (ward: number | null) => void;
+  onViewportBbox: (bbox: [number, number, number, number]) => void;
+  initialView: { longitude: number; latitude: number; zoom: number };
+  onViewStateChange: (view: { longitude: number; latitude: number; zoom: number }) => void;
+  focusSegmentId: number | null;
+  onFocusComplete: () => void;
 }
 
 type PopupState =
@@ -76,15 +84,20 @@ export default function MapView({
   collisions,
   bikeLanes,
   hotspots,
+  gapHeatmap,
   layers,
   selectedWard,
   onSelectWard,
+  onViewportBbox,
+  initialView,
+  onViewStateChange,
+  focusSegmentId,
+  onFocusComplete,
 }: Props) {
   const mapRef = useRef<MapRef>(null);
   const [popup, setPopup] = useState<PopupState | null>(null);
   const [cursor, setCursor] = useState("");
 
-  // Zoom to the ward when one is chosen from the map or the ward picker.
   useEffect(() => {
     if (selectedWard == null || !wards) return;
     const feature = wards.features.find((f) => f.properties.ward_number === selectedWard);
@@ -98,6 +111,30 @@ export default function MapView({
       { padding: 40, duration: 700, maxZoom: 14 },
     );
   }, [selectedWard, wards]);
+
+  useEffect(() => {
+    if (focusSegmentId == null || !hotspots) return;
+    const feature = hotspots.features.find((f) => f.properties.id === focusSegmentId);
+    if (!feature) return;
+    const [w, s, e, n] = bboxOf(feature.geometry);
+    mapRef.current?.fitBounds(
+      [
+        [w, s],
+        [e, n],
+      ],
+      { padding: 80, duration: 800, maxZoom: 16 },
+    );
+    onFocusComplete();
+  }, [focusSegmentId, hotspots, onFocusComplete]);
+
+  function handleMoveEnd(): void {
+    const map = mapRef.current;
+    if (!map) return;
+    const b = map.getBounds();
+    onViewportBbox([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+    const c = map.getCenter();
+    onViewStateChange({ longitude: c.lng, latitude: c.lat, zoom: map.getZoom() });
+  }
 
   function handleClick(e: MapLayerMouseEvent): void {
     const features = e.features ?? [];
@@ -127,7 +164,7 @@ export default function MapView({
   return (
     <MapGL
       ref={mapRef}
-      initialViewState={TORONTO_CENTER}
+      initialViewState={{ ...TORONTO_CENTER, ...initialView }}
       mapStyle={BASEMAP_STYLE}
       minZoom={9}
       maxBounds={[-79.9, 43.3, -78.9, 44.0]}
@@ -138,11 +175,14 @@ export default function MapView({
         LAYER_IDS.wardFill,
       ]}
       cursor={cursor}
+      onLoad={() => handleMoveEnd()}
+      onMoveEnd={handleMoveEnd}
       onClick={handleClick}
       onMouseEnter={() => setCursor("pointer")}
       onMouseLeave={() => setCursor("")}
     >
       <NavigationControl position="top-right" showCompass={false} />
+      <GapHeatmapOverlay points={gapHeatmap} visible={layers.gapHeatmap} />
 
       <Source id="wards" type="geojson" data={wards ?? EMPTY}>
         <Layer {...wardFillLayer(selectedWard)} />
@@ -202,9 +242,9 @@ function PopupBody({ popup }: { popup: PopupState }) {
         </strong>
         <div>Cyclist KSI on this segment: {p.collision_count}</div>
         <div>Infrastructure: {PROTECTION_LABEL[p.protection_level]}</div>
+        {p.dead_end_protected && <div>Flagged: protected lane dead-ends nearby</div>}
         <small>
-          Ranked by gap score ({p.gap_score}), which combines KSI count and protection level. It
-          describes locations only.
+          Gap score {p.gap_score} — see Methodology for the formula. Describes locations only.
         </small>
       </div>
     );

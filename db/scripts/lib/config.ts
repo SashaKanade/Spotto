@@ -10,5 +10,9 @@ export const PACKAGES = {
   requests311: "2e54bc0e-4399-4076-b717-351df5918ae7",
 } as const;
 
-/** Recent 311 years to ingest (large files). */
-export const REQUESTS_311_YEARS = [2023, 2024, 2025] as const;
+/** Most recent three complete 311 calendar-year files; exclude the partial current year. */
+const currentYear = new Date().getUTCFullYear();
+export const REQUESTS_311_YEARS = [currentYear - 3, currentYear - 2, currentYear - 1] as const;
+
+/** Keep a five-calendar-year window of KSI records, including the current year. */
+export const KSI_MIN_YEAR = currentYear - 4;

@@ -74,4 +74,19 @@ export interface LayerToggles {
   collisions: boolean;
   bikeLanes: boolean;
   hotspots: boolean;
+  gapHeatmap: boolean;
+}
+
+export interface GapHeatmapPoint {
+  coordinates: [number, number];
+  weight: number;
+  segment_id: number;
+}
+
+export interface GapHeatmapProps {
+  segment_id: number;
+  gap_score: number;
+  collision_count: number;
+  protection_level: ProtectionLevel;
+  weight: number;
 }

@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 
+export const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
+export const apiUrl = (path: string) => `${API_BASE}${path}`;
+
 export async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(url, { signal });
+  const res = await fetch(apiUrl(url), { signal });
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
     try {
