@@ -143,7 +143,7 @@ export default function App() {
   return (
     <div className="shell">
       <header className="topbar">
-        <h1>Safe Streets TO</h1>
+        <h1>Spotto</h1>
         <p>Toronto cyclist safety and bike infrastructure. Nonpartisan civic data.</p>
         <nav className="topnav" aria-label="Site sections">
           <button
