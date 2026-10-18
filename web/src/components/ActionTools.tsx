@@ -1,18 +1,29 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiUrl } from "../api";
 
 interface LocationSummary { count: number; first_year: number | null; last_year: number | null; ward_number: number | null; ward_name: string | null; radius_m: number; caveat: string }
 
-export default function ActionTools() {
-  const [lat, setLat] = useState("43.6532");
-  const [lng, setLng] = useState("-79.3832");
+export default function ActionTools({ selectedLocation }: { selectedLocation: { lat: number; lng: number } | null }) {
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
   const [issue, setIssue] = useState("A bike-related street or cycling infrastructure issue");
   const [message, setMessage] = useState("");
   const [report, setReport] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    if (selectedLocation) {
+      setLat(selectedLocation.lat.toFixed(5));
+      setLng(selectedLocation.lng.toFixed(5));
+    }
+  }, [selectedLocation]);
+
   async function generate(): Promise<void> {
+    if (!lat.trim() || !lng.trim() || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
+      setError("Click a location on the map or enter valid latitude and longitude first.");
+      return;
+    }
     setBusy(true); setError(""); setMessage("");
     try {
       const params = new URLSearchParams({ lat, lng, radius_m: "300" });
@@ -30,7 +41,7 @@ export default function ActionTools() {
 
   return <section className="action-tools" aria-label="Action text generators">
     <h3>Action text generators</h3>
-    <p className="muted">Enter a Toronto location to create a 311 draft and a data-based message. Review and edit before sending.</p>
+    <p className="muted">Click a location on the map, or enter its coordinates, to create a 311 draft and a data-based message. Review and edit before sending.</p>
     <div className="coordinate-grid">
       <label className="field"><span>Latitude</span><input value={lat} onChange={(e) => setLat(e.target.value)} inputMode="decimal" /></label>
       <label className="field"><span>Longitude</span><input value={lng} onChange={(e) => setLng(e.target.value)} inputMode="decimal" /></label>

@@ -50,6 +50,7 @@ interface Props {
   onViewStateChange: (view: { longitude: number; latitude: number; zoom: number }) => void;
   focusSegmentId: number | null;
   onFocusComplete: () => void;
+  onLocationSelect: (location: { lat: number; lng: number }) => void;
 }
 
 type PopupState =
@@ -93,6 +94,7 @@ export default function MapView({
   onViewStateChange,
   focusSegmentId,
   onFocusComplete,
+  onLocationSelect,
 }: Props) {
   const mapRef = useRef<MapRef>(null);
   const [popup, setPopup] = useState<PopupState | null>(null);
@@ -140,6 +142,7 @@ export default function MapView({
     const features = e.features ?? [];
     const find = (id: string) => features.find((f) => f.layer.id === id);
     const { lng, lat } = e.lngLat;
+    onLocationSelect({ lat, lng });
 
     const collision = find(LAYER_IDS.collisions);
     if (collision) {

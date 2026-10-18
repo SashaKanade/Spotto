@@ -59,6 +59,7 @@ export default function App() {
   const [exportLayer, setExportLayer] = useState<"collisions" | "bike-lanes" | "corridors">("collisions");
   const [exportFormat, setExportFormat] = useState<"csv" | "geojson">("geojson");
   const [focusSegmentId, setFocusSegmentId] = useState<number | null>(null);
+  const [actionLocation, setActionLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const wards = useApi<ApiFeatureCollection<WardProps>>("/api/wards");
   const meta = useApi<Meta>("/api/meta");
@@ -192,6 +193,7 @@ export default function App() {
               onViewStateChange={setViewState}
               focusSegmentId={focusSegmentId}
               onFocusComplete={onFocusComplete}
+              onLocationSelect={setActionLocation}
             />
             <LayerControls
               layers={layers}
@@ -250,7 +252,7 @@ export default function App() {
                 summaries={summaries}
               />
             )}
-            <ActionTools />
+            <ActionTools selectedLocation={actionLocation} />
             <section className="share-export" aria-label="Share and export">
               <h3>Share and export</h3>
               <button type="button" onClick={() => void copyShareUrl()}>{copied ? "Link copied" : "Copy map link"}</button>
