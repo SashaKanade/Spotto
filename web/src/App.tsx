@@ -10,8 +10,6 @@ import type {
   ApiFeatureCollection,
   BikeLaneProps,
   CollisionProps,
-  GapHeatmapPoint,
-  GapHeatmapProps,
   HotspotProps,
   LayerToggles,
   Meta,
@@ -35,9 +33,9 @@ function readInitialState() {
   const number = (key: string, fallback: number, min: number, max: number) => {
     const n = Number(p.get(key)); return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
   };
-  const defaults: LayerToggles = { collisions: true, bikeLanes: true, hotspots: false, gapHeatmap: false };
+  const defaults: LayerToggles = { collisions: true, bikeLanes: true, hotspots: false };
   const selected = p.get("layers");
-  const layers = selected == null ? defaults : { collisions: selected.includes("c"), bikeLanes: selected.includes("b"), hotspots: selected.includes("h"), gapHeatmap: selected.includes("g") };
+  const layers = selected == null ? defaults : { collisions: selected.includes("c"), bikeLanes: selected.includes("b"), hotspots: selected.includes("h") };
   const ward = Number(p.get("ward"));
   return {
     view: { longitude: number("lng", DEFAULT_VIEW.longitude, -79.9, -78.9), latitude: number("lat", DEFAULT_VIEW.latitude, 43.3, 44), zoom: number("z", DEFAULT_VIEW.zoom, 9, 18) },
@@ -51,7 +49,9 @@ export default function App() {
   const [page, setPage] = useState<Page>("map");
   const [sideTab, setSideTab] = useState<SideTab>("corridors");
   const [layers, setLayers] = useState<LayerToggles>(initial.layers);
-  const [requested, setRequested] = useState<LayerToggles>(layers);
+  // The corridor panel is the initial sidebar view, so fetch its list immediately;
+  // the layer toggle separately controls whether those results are drawn on the map.
+  const [requested, setRequested] = useState<LayerToggles>({ ...layers, hotspots: true });
   const [selectedWard, setSelectedWard] = useState<number | null>(initial.ward);
   const [viewportBbox, setViewportBbox] = useState(DEFAULT_BBOX);
   const [viewState, setViewState] = useState(initial.view);
@@ -60,6 +60,7 @@ export default function App() {
   const [exportFormat, setExportFormat] = useState<"csv" | "geojson">("geojson");
   const [focusSegmentId, setFocusSegmentId] = useState<number | null>(null);
   const [actionLocation, setActionLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [searchLocation, setSearchLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const wards = useApi<ApiFeatureCollection<WardProps>>("/api/wards");
   const meta = useApi<Meta>("/api/meta");
@@ -71,23 +72,6 @@ export default function App() {
   );
   const hotspots = useApi<ApiFeatureCollection<HotspotProps>>(
     requested.hotspots ? LAYER_URLS.hotspots : null,
-  );
-
-  const heatmapUrl = useMemo(() => {
-    if (!requested.gapHeatmap) return null;
-    const [w, s, e, n] = viewportBbox;
-    return `/api/gap-heatmap?bbox=${w},${s},${e},${n}&min_gap=0.5&limit=8000`;
-  }, [requested.gapHeatmap, viewportBbox]);
-
-  const heatmapFc = useApi<ApiFeatureCollection<GapHeatmapProps>>(heatmapUrl);
-  const gapHeatmapPoints: GapHeatmapPoint[] = useMemo(
-    () =>
-      (heatmapFc.data?.features ?? []).map((f) => ({
-        coordinates: f.geometry.type === "Point" ? (f.geometry.coordinates as [number, number]) : [0, 0],
-        weight: f.properties.weight,
-        segment_id: f.properties.segment_id,
-      })),
-    [heatmapFc.data],
   );
 
   const summaries = useMemo(() => {
@@ -116,7 +100,7 @@ export default function App() {
     url.searchParams.set("lng", viewState.longitude.toFixed(5));
     url.searchParams.set("lat", viewState.latitude.toFixed(5));
     url.searchParams.set("z", viewState.zoom.toFixed(2));
-    url.searchParams.set("layers", `${layers.collisions ? "c" : ""}${layers.bikeLanes ? "b" : ""}${layers.hotspots ? "h" : ""}${layers.gapHeatmap ? "g" : ""}`);
+    url.searchParams.set("layers", `${layers.collisions ? "c" : ""}${layers.bikeLanes ? "b" : ""}${layers.hotspots ? "h" : ""}`);
     if (selectedWard == null) url.searchParams.delete("ward"); else url.searchParams.set("ward", String(selectedWard));
     window.history.replaceState({}, "", url);
   }, [viewState, layers, selectedWard]);
@@ -184,7 +168,6 @@ export default function App() {
               collisions={collisions.data}
               bikeLanes={bikeLanes.data}
               hotspots={hotspots.data}
-              gapHeatmap={gapHeatmapPoints}
               layers={layers}
               selectedWard={selectedWard}
               onSelectWard={setSelectedWard}
@@ -194,6 +177,7 @@ export default function App() {
               focusSegmentId={focusSegmentId}
               onFocusComplete={onFocusComplete}
               onLocationSelect={setActionLocation}
+              searchLocation={searchLocation}
             />
             <LayerControls
               layers={layers}
@@ -202,13 +186,11 @@ export default function App() {
                 collisions: collisions.loading,
                 bikeLanes: bikeLanes.loading,
                 hotspots: hotspots.loading,
-                gapHeatmap: heatmapFc.loading,
               }}
               errors={{
                 collisions: collisions.error,
                 bikeLanes: bikeLanes.error,
                 hotspots: hotspots.error,
-                gapHeatmap: heatmapFc.error,
               }}
             />
           </div>
@@ -252,7 +234,13 @@ export default function App() {
                 summaries={summaries}
               />
             )}
-            <ActionTools selectedLocation={actionLocation} />
+            <ActionTools
+              selectedLocation={actionLocation}
+              onNavigateToLocation={(location) => {
+                setActionLocation(location);
+                setSearchLocation(location);
+              }}
+            />
             <section className="share-export" aria-label="Share and export">
               <h3>Share and export</h3>
               <button type="button" onClick={() => void copyShareUrl()}>{copied ? "Link copied" : "Copy map link"}</button>
@@ -262,7 +250,7 @@ export default function App() {
               <a className="download-link" href={exportUrl}>Download export</a>
             </section>
             {!layers.hotspots && sideTab === "corridors" && (
-              <p className="muted">Turn on “Top 20 gap corridors” to load the ranked list and map layer.</p>
+              <p className="muted">Turn on “Top 20 gap corridors” to show the ranked corridors on the map.</p>
             )}
           </aside>
         </div>

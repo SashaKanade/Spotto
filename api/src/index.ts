@@ -2,7 +2,6 @@ import cors from "cors";
 import express from "express";
 import { pool } from "./db.js";
 import { errorHandler } from "./http.js";
-import { gapHeatmapRouter } from "./routes/gap-heatmap.js";
 import { hotspotsRouter } from "./routes/hotspots.js";
 import { methodologyRouter } from "./routes/methodology.js";
 import { layersRouter } from "./routes/layers.js";
@@ -13,6 +12,7 @@ import { actionsRouter } from "./routes/actions.js";
 import { askRouter } from "./routes/ask.js";
 import { briefingRouter } from "./routes/briefing.js";
 import { exportsRouter } from "./routes/exports.js";
+import { geocodeRouter } from "./routes/geocode.js";
 
 const app = express();
 const port = Number(process.env.PORT) || 3001;
@@ -45,13 +45,13 @@ app.get("/api/health", async (_req, res) => {
 
 app.use("/api/meta", metaRouter);
 app.use("/api/hotspots", hotspotsRouter);
-app.use("/api/gap-heatmap", gapHeatmapRouter);
 app.use("/api/methodology", methodologyRouter);
 app.use("/api/wards", wardsRouter);
 app.use("/api/ward", briefingRouter);
 app.use("/api", askRouter);
 app.use("/api/actions", actionsRouter);
 app.use("/api/exports", exportsRouter);
+app.use("/api/geocode", geocodeRouter);
 app.use("/api/segments", segmentsRouter);
 app.use("/api", layersRouter); // /api/collisions, /api/bike-lanes
 

@@ -5,7 +5,7 @@ Civic data platform for Toronto's 2026 municipal election. It shows where cyclis
 ## Stack
 - Monorepo: /api (Node + Express + TypeScript), /web (React + Vite + TypeScript), /db (SQL + ingestion scripts)
 - Database: PostgreSQL with PostGIS (hosted on Supabase). Use the `pg` package with a DATABASE_URL from .env
-- Map: MapLibre GL JS (react-map-gl) with a free basemap, deck.gl for heatmap/hexbin layers
+- Map: MapLibre GL JS (react-map-gl) with a free basemap
 - Charts: Recharts
 - AI: Anthropic API, called only from the backend. Key in ANTHROPIC_API_KEY in .env
 - Never commit .env. Provide .env.example.
@@ -24,7 +24,7 @@ Before writing the schema, inspect each file's real columns and print a summary.
 Tables: wards, street_segments, bike_infrastructure (with a normalized protection_level: protected / painted / shared / none), collisions (cyclist KSI only: date, year, location geometry, ward_id, nearest_segment_id), requests_311 (type, status, opened, closed, geometry, ward_id), segment_stats (collision_count, protection_level, gap_score). Add GIST indexes on every geometry column. Add an `ingest_log` table recording dataset name, source URL, row count, and refreshed_at.
 
 ## Features
-1. Map: toggles for collisions, bike lanes (colored by protection level), 311 reports, gap heatmap. Click a point or segment for details.
+1. Map: toggles for collisions, bike lanes (colored by protection level), and gap corridors. Click a point or segment for details.
 2. Gap engine: for each street segment, compute a gap score combining cyclist KSI count and protection level (more collisions + less protection = higher score). Also flag where protected lanes dead-end into unprotected streets. Document the formula on a Methodology page. Output a ranked top-20 corridors list.
 3. Ward pages (all 25): cyclist KSI by year, km of protected lanes, share of ward collisions within 100 m of a protected lane, 311 bike complaints and median days to close. Descriptive only.
 4. Action tools: (a) click a location, get a pre-filled 311 report text plus a link to the City's 311 page, (b) a message generator that cites local data ("Within 300 m of this intersection there were N reported cyclist KSI collisions since YYYY") that the user can copy to send to their councillor, (c) the same neutral "questions to ask candidates" list for every ward.

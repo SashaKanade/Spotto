@@ -27,12 +27,10 @@ import type {
   ApiFeatureCollection,
   BikeLaneProps,
   CollisionProps,
-  GapHeatmapPoint,
   HotspotProps,
   LayerToggles,
   WardProps,
 } from "../types";
-import GapHeatmapOverlay from "./GapHeatmapOverlay";
 
 type Fc<P> = ApiFeatureCollection<P> | null;
 
@@ -41,7 +39,6 @@ interface Props {
   collisions: Fc<CollisionProps>;
   bikeLanes: Fc<BikeLaneProps>;
   hotspots: Fc<HotspotProps>;
-  gapHeatmap: GapHeatmapPoint[];
   layers: LayerToggles;
   selectedWard: number | null;
   onSelectWard: (ward: number | null) => void;
@@ -49,6 +46,7 @@ interface Props {
   initialView: { longitude: number; latitude: number; zoom: number };
   onViewStateChange: (view: { longitude: number; latitude: number; zoom: number }) => void;
   focusSegmentId: number | null;
+  searchLocation: { lat: number; lng: number } | null;
   onFocusComplete: () => void;
   onLocationSelect: (location: { lat: number; lng: number }) => void;
 }
@@ -85,7 +83,6 @@ export default function MapView({
   collisions,
   bikeLanes,
   hotspots,
-  gapHeatmap,
   layers,
   selectedWard,
   onSelectWard,
@@ -93,6 +90,7 @@ export default function MapView({
   initialView,
   onViewStateChange,
   focusSegmentId,
+  searchLocation,
   onFocusComplete,
   onLocationSelect,
 }: Props) {
@@ -128,6 +126,15 @@ export default function MapView({
     );
     onFocusComplete();
   }, [focusSegmentId, hotspots, onFocusComplete]);
+
+  useEffect(() => {
+    if (!searchLocation) return;
+    mapRef.current?.flyTo({
+      center: [searchLocation.lng, searchLocation.lat],
+      zoom: 16,
+      duration: 700,
+    });
+  }, [searchLocation]);
 
   function handleMoveEnd(): void {
     const map = mapRef.current;
@@ -185,8 +192,6 @@ export default function MapView({
       onMouseLeave={() => setCursor("")}
     >
       <NavigationControl position="top-right" showCompass={false} />
-      <GapHeatmapOverlay points={gapHeatmap} visible={layers.gapHeatmap} />
-
       <Source id="wards" type="geojson" data={wards ?? EMPTY}>
         <Layer {...wardFillLayer(selectedWard)} />
         <Layer {...wardLineLayer} />

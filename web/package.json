@@ -8,11 +8,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@deck.gl/aggregation-layers": "^9.0.40",
-    "@deck.gl/core": "^9.0.40",
-    "@deck.gl/layers": "^9.0.40",
-    "@deck.gl/mapbox": "^9.0.40",
-    "@deck.gl/react": "^9.0.40",
     "maplibre-gl": "^4.7.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

@@ -53,21 +53,6 @@ export default function LayerControls({ layers, onToggle, loading, errors }: Pro
         </Swatch>
       ),
     },
-    {
-      key: "gapHeatmap",
-      label: "Gap heatmap (hex bins)",
-      swatch: (
-        <Swatch>
-          <rect x="4" y="2" width="26" height="10" fill="url(#gapGrad)" opacity="0.85" />
-          <defs>
-            <linearGradient id="gapGrad" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#fee8c8" />
-              <stop offset="100%" stopColor="#7f2704" />
-            </linearGradient>
-          </defs>
-        </Swatch>
-      ),
-    },
   ];
 
   return (

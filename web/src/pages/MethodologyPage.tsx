@@ -77,10 +77,6 @@ export default function MethodologyPage() {
               <strong>Top 20 gap corridors</strong> — highest gap scores city-wide, drawn as
               highlighted centreline segments.
             </li>
-            <li>
-              <strong>Gap heatmap</strong> — hex bins of segment centroids in the current map view,
-              weighted by gap score (deck.gl HexagonLayer).
-            </li>
           </ul>
 
           <h3>Data honesty</h3>
